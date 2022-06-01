@@ -5,10 +5,12 @@ from .data_utils.data_loader import image_segmentation_generator, \
     verify_segmentation_dataset
 import six
 from keras.callbacks import Callback
-from keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import ModelCheckpoint
 import tensorflow as tf
+from tensorflow.keras.metrics import binary_crossentropy
 import glob
 import sys
+import numpy as np
 
 def find_latest_checkpoint(checkpoints_path, fail_safe=True):
 
@@ -41,10 +43,15 @@ def find_latest_checkpoint(checkpoints_path, fail_safe=True):
 
     return latest_epoch_checkpoint
 
-def masked_categorical_crossentropy(gt, pr):
-    from keras.losses import categorical_crossentropy
-    mask = 1 - gt[:, :, 0]
-    return categorical_crossentropy(gt, pr) * mask
+
+def weighted_binary_crossentropy(gt, pr, factor=8.):
+    y_true = tf.reshape(gt, [-1])
+    y_pred = tf.reshape(pr, [-1])
+
+    weights = (tf.math.abs(y_true-1) * factor) + 1.
+    bce = binary_crossentropy(y_true, y_pred)
+    weighted_bce = tf.math.reduce_mean(bce * weights)
+    return weighted_bce
 
 
 class CheckpointsCallback(Callback):
@@ -76,7 +83,7 @@ def train(model,
           steps_per_epoch=512,
           val_steps_per_epoch=512,
           gen_use_multiprocessing=False,
-          ignore_zero_class=False,
+          use_weighted_binary_crossentropy=False,
           optimizer_name='adam',
           do_augment=False,
           augmentation_name="aug_all",
@@ -111,10 +118,10 @@ def train(model,
 
     if optimizer_name is not None:
 
-        if ignore_zero_class:
-            loss_k = masked_categorical_crossentropy
+        if use_weighted_binary_crossentropy:
+            loss_k = weighted_binary_crossentropy
         else:
-            loss_k = 'categorical_crossentropy'
+            loss_k = 'binary_crossentropy'
 
         model.compile(loss=loss_k,
                       optimizer=optimizer_name,

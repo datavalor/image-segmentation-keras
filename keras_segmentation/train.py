@@ -1,5 +1,6 @@
 import json
 import os
+import pickle
 
 from .data_utils.data_loader import image_segmentation_generator, \
     verify_segmentation_dataset
@@ -204,12 +205,17 @@ def train(model,
         callbacks = []
 
     if not validate:
-        model.fit(train_gen, steps_per_epoch=steps_per_epoch,
+        history = model.fit(train_gen, steps_per_epoch=steps_per_epoch,
                   epochs=epochs, callbacks=callbacks, initial_epoch=initial_epoch)
     else:
-        model.fit(train_gen,
+        history = model.fit(train_gen,
                   steps_per_epoch=steps_per_epoch,
                   validation_data=val_gen,
                   validation_steps=val_steps_per_epoch,
                   epochs=epochs, callbacks=callbacks,
                   use_multiprocessing=gen_use_multiprocessing, initial_epoch=initial_epoch)
+
+    if checkpoints_path is not None:
+        with open(checkpoints_path + '_trainHistoryDict.pkl', 'wb') as file_pi:
+            pickle.dump(history.history, file_pi)
+
